@@ -9,9 +9,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class NewBoardRequest {
+public class NewSpaceRequest {
 	@NotBlank
 	private String name;
-        @NotNull
-        private Long idSpace;
 }

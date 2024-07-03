@@ -1,6 +1,7 @@
 package py.com.una.progest.controllers;
 
 import jakarta.validation.Valid;
+import java.text.SimpleDateFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +25,10 @@ import py.com.una.progest.service.TaskService;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import py.com.una.progest.payload.request.NewSpaceRequest;
+import py.com.una.progest.repository.WorkSpaceRepository;
 
-@CrossOrigin(origins = "http://localhost:3000", maxAge = 3600, allowCredentials = "true")
+//@CrossOrigin(origins = "http://localhost:3000", maxAge = 3600, allowCredentials = "true")
 //@CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
 @RequestMapping("/api/board")
@@ -37,24 +40,28 @@ public class BoardController {
     private final TaskRepository taskRepository;
     private final TaskService taskService;
     private final ColumnService columnService;
+    private final WorkSpaceRepository spaceRepository;
 
     @Autowired
     public BoardController(BoardRepository boardRepository, ListColumnRepository columnRepository,
-                           UserRepository userRepository, TaskRepository taskRepository,
-                           TaskService taskService, ColumnService columnService) {
+            UserRepository userRepository, TaskRepository taskRepository,
+            TaskService taskService, ColumnService columnService, WorkSpaceRepository space) {
         this.boardRepository = boardRepository;
         this.columnRepository = columnRepository;
         this.userRepository = userRepository;
         this.taskRepository = taskRepository;
         this.taskService = taskService;
         this.columnService = columnService;
+        this.spaceRepository = space;
     }
 
     @PostMapping("/new")
     public ResponseEntity<?> createBoard(@Valid @RequestBody NewBoardRequest boardRequest) {
         Date date = new Date();
 
-        Board newBoard = new Board(null, boardRequest.getName(), date, userRepository.findByUsername(getUsername()).get());
+        Space s = spaceRepository.findById(boardRequest.getIdSpace()).orElse(null);
+
+        Board newBoard = new Board(null, boardRequest.getName(), date, userRepository.findByUsername(getUsername()).get(), s);
         newBoard = boardRepository.save(newBoard);
 
         Set<ListColumn> columnSet = new HashSet<>();
@@ -69,6 +76,17 @@ public class BoardController {
         columnRepository.saveAll(columnSet);
 
         return ResponseEntity.ok(new MessageResponse("Board created successfully!"));
+    }
+
+    @PostMapping("/newSpace")
+    public ResponseEntity<?> createSpace(@Valid @RequestBody NewSpaceRequest spaceRequest) {
+        Date date = new Date();
+
+        Space space = new Space(null, spaceRequest.getName(), date);
+
+        spaceRepository.save(space);
+
+        return ResponseEntity.ok(new MessageResponse("Space created successfully!"));
     }
 
     @PostMapping("/column/new")
@@ -93,8 +111,12 @@ public class BoardController {
             calendar.setTime(date);
             // Suma dos semanas a la fecha actual (duracion del spring) por ||defecto
             calendar.add(Calendar.WEEK_OF_YEAR, 2);
+            if (taskRequest.getExpiration() == null) {
+                taskRequest.setExpiration(calendar.getTime());
+            }
 
-            Task task = new Task(null, taskRequest.getTitle(), taskRequest.getDescription() != null ? taskRequest.getDescription() : "", date, calendar.getTime(),
+            Task task = new Task(null, taskRequest.getTitle(), taskRequest.getDescription() != null ? taskRequest.getDescription() : "",
+                    date, taskRequest.getExpiration(),
                     taskRequest.getOrder(), column, null);
             taskRepository.save(task);
 
@@ -125,7 +147,6 @@ public class BoardController {
         return ResponseEntity.ok(new MessageResponse("board is deleted!"));
     }
 
-
     @DeleteMapping("/{columnId}")
     public ResponseEntity<?> deleteColumn(@PathVariable Long columnId) {
         taskRepository.deleteAllByListColumnId(columnId);
@@ -155,7 +176,25 @@ public class BoardController {
 
     @GetMapping("/workSpace")
     public ResponseEntity<?> getWorkSpace() {
-        List<Board> spaces = boardRepository.findAll();
+        List<Space> spaces = spaceRepository.findAll();
+
+        if (spaces.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(new MessageResponse("work is empty"));
+        }
+
+        SpaceDataResponse response = new SpaceDataResponse(
+                spaces.stream().map(space
+                        -> new WorkSpace(space.getId(), space.getName(), space.getCreationDate())
+                )
+                        .collect(Collectors.toList()));
+        return ResponseEntity.ok(response);
+
+    }
+
+    @GetMapping("/workSpace/{workspaceId}")
+    public ResponseEntity<?> getWorkSpaceById(@PathVariable Long workspaceId) {
+        Space sp = spaceRepository.findById(workspaceId).orElse(null);
+        Set<Board> spaces = boardRepository.findBySpace(sp).orElse(null);
 
         if (spaces.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).body(new MessageResponse("work is empty"));
@@ -163,11 +202,10 @@ public class BoardController {
 
         SpaceDataResponse response = new SpaceDataResponse(
                 spaces.stream().map(board
-                                -> new WorkSpace(board.getId(), board.getName(), board.getCreationDate())
-                        )
+                        -> new WorkSpace(board.getId(), board.getName(), board.getCreationDate())
+                )
                         .collect(Collectors.toList()));
         return ResponseEntity.ok(response);
-
     }
 
     @PatchMapping("/updateBoard")
@@ -194,10 +232,20 @@ public class BoardController {
         return tasks.stream()
                 .map(task -> {
                     return new TaskData(task.getId(), task.getTitle(),
-                            task.getDescription(), task.getCreationDate(), task.getExpirationDate(),
-                            task.getOrderTask());
+                            task.getDescription(), getDateInString(task.getCreationDate()), getDateInString(task.getExpirationDate()),
+                            task.getOrderTask(), getExpired());
                 })
                 .collect(Collectors.toList());
+    }
+
+    private Integer getExpired() {
+        return 1;
+    }
+
+    private String getDateInString(Date date) {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+        return sdf.format(date);
+
     }
 
 }

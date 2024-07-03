@@ -1,5 +1,10 @@
 package py.com.una.progest.service;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +35,11 @@ public class TaskService {
             if (newListColumn != null) {
                 task.setDescription(taskData.getDescription());
                 task.setTitle(taskData.getTitle());
-                task.setExpirationDate(taskData.getExpirationDate());
+                try {
+                    task.setExpirationDate(new SimpleDateFormat("dd/MM/yyyy").parse(taskData.getExpirationDate()));
+                } catch (ParseException ex) {
+                    task.setExpirationDate(null);
+                }
                 task.setListColumn(newListColumn);
                 task.setOrderTask(taskData.getOrder());
                 return taskRepository.save(task);

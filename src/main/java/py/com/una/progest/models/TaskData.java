@@ -13,8 +13,9 @@ public class TaskData {
     private Long id;
     private String title;
     private String description;
-    private Date creationDate;
-    private Date expirationDate;
+    private String creationDate;
+    private String expirationDate;
     //private String user;
     private Integer order;
+    private Integer expired;
 }

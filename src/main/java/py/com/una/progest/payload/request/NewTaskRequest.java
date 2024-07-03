@@ -21,5 +21,5 @@ public class NewTaskRequest {
 
 	private Integer order;
 
-	//private Date expirationDate;
+	private Date expiration;
 }
